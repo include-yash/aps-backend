@@ -10,6 +10,8 @@ from database import get_db
 import google.generativeai as genai
 from google.generativeai.types import GenerationConfig
 from dotenv import load_dotenv
+from sqlalchemy.exc import IntegrityError
+
 
 # Load environment variables from .env file
 load_dotenv()
@@ -23,6 +25,15 @@ genai.configure(api_key=GEMINI_API_KEY)
 
 router = APIRouter()
 
+
+# Add this Pydantic model for the submission data
+class QuizSubmission(BaseModel):
+    student_name: str
+    student_usn: str
+    test_id: int
+    total_marks: int
+    max_marks: int
+    time_taken: int  # in seconds
 class SchemaUpload(BaseModel):
     test_name: str
     description: str | None = None
@@ -369,3 +380,107 @@ async def validate_answer(
         "expected_output": normalize(expected_rows),
         "user_output": normalize(user_rows),
     }
+
+@router.post("/submissions")
+async def submit_quiz_result(
+    submission: QuizSubmission,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Store student quiz results in the database.
+    USN will be capitalized and duplicates will be ignored.
+    """
+    try:
+        # Capitalize the USN
+        capitalized_usn = submission.student_usn.upper()
+        
+        # Check if submission already exists for this student and test
+        check_sql = text("""
+            SELECT id FROM quiz_submissions 
+            WHERE student_usn = :usn AND test_id = :test_id
+        """)
+        result = await db.execute(
+            check_sql, 
+            {"usn": capitalized_usn, "test_id": submission.test_id}
+        )
+        existing_submission = result.fetchone()
+        
+        if existing_submission:
+            return {
+                "message": "Quiz already submitted for this student",
+                "submission_id": existing_submission[0],
+                "status": "duplicate"
+            }
+        
+        # Insert new submission
+        insert_sql = text("""
+            INSERT INTO quiz_submissions 
+            (student_name, student_usn, test_id, total_marks, max_marks, time_taken, submitted_at)
+            VALUES (:name, :usn, :test_id, :total_marks, :max_marks, :time_taken, NOW())
+            RETURNING id
+        """)
+        
+        result = await db.execute(insert_sql, {
+            "name": submission.student_name,
+            "usn": capitalized_usn,
+            "test_id": submission.test_id,
+            "total_marks": submission.total_marks,
+            "max_marks": submission.max_marks,
+            "time_taken": submission.time_taken
+        })
+        
+        submission_id = result.scalar_one()
+        await db.commit()
+        
+        return {
+            "message": "Quiz results stored successfully",
+            "submission_id": submission_id,
+            "status": "created"
+        }
+        
+    except IntegrityError:
+        await db.rollback()
+        return {
+            "message": "Quiz already submitted for this student",
+            "status": "duplicate"
+        }
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to store submission: {str(e)}")
+
+# Optional: Get submissions for a test
+@router.get("/tests/{test_id}/submissions")
+async def get_test_submissions(test_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Get all submissions for a specific test
+    """
+    try:
+        result = await db.execute(
+            text("""
+                SELECT id, student_name, student_usn, total_marks, max_marks, 
+                       time_taken, submitted_at
+                FROM quiz_submissions 
+                WHERE test_id = :test_id
+                ORDER BY total_marks DESC, submitted_at DESC
+            """),
+            {"test_id": test_id}
+        )
+        
+        submissions = result.fetchall()
+        
+        return {
+            "submissions": [
+                {
+                    "id": sub[0],
+                    "student_name": sub[1],
+                    "student_usn": sub[2],
+                    "total_marks": sub[3],
+                    "max_marks": sub[4],
+                    "time_taken": sub[5],
+                    "submitted_at": sub[6].isoformat() if sub[6] else None
+                }
+                for sub in submissions
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch submissions: {str(e)}")
