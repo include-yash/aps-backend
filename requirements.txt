@@ -1,8 +1,39 @@
-async_lru==2.0.5
-fastapi==0.118.2
-protobuf==5.29.5
-pydantic==2.12.0
-python-dotenv==1.1.1
+# FastAPI web framework
+fastapi==0.116.1
+starlette==0.47.3
+anyio==4.10.0
+typing-extensions==4.15.0
+
+# Async PostgreSQL driver
+asyncpg==0.30.0
+
+# SQLAlchemy ORM
 SQLAlchemy==2.0.43
-uvicorn==0.37.0
+greenlet==3.2.4
+
+# Uvicorn ASGI server
+uvicorn==0.35.0
+h11==0.16.0
+click==8.2.1
+
+# Gunicorn for production deployment
+gunicorn==21.2.0
+
+# Google Generative AI / Gemini
 google-generativeai==0.8.5
+google-ai-generativelanguage==0.6.15
+google-api-core==2.25.1
+google-api-python-client==2.181.0
+google-auth==2.40.3
+protobuf>=3.20.2,<6.0.0
+tqdm==4.67.1
+proto-plus==1.26.1
+
+# Environment variables
+python-dotenv==1.1.1
+
+# Pydantic for data validation
+pydantic==2.11.7
+pydantic-core==2.33.2
+annotated-types==0.7.0
+typing-inspection==0.4.1
