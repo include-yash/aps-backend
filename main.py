@@ -1,30 +1,62 @@
-# main.py
+import os
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes import schema_routes
+from routes import teacher_routes, student_routes, validate_routes
+from database import engine, Base
+from dotenv import load_dotenv
 
-app = FastAPI(
-    title="AI Powered SQL Assessment Platform",
-    description="Backend for schema upload, question generation, and query validation",
-    version="0.1.0"
+# Load environment variables
+load_dotenv()
+FRONTEND_ORIGINS = os.getenv(
+    "FRONTEND_ORIGINS",
+    "http://localhost:3000,https://sql-playground-bay.vercel.app"
+).split(",")
+
+# Logging setup
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
+logger = logging.getLogger("main")
 
-# Add CORS middleware
+app = FastAPI(title="AI SQL Assessment Platform", version="1.0")
+
+
+# Startup event
+@app.on_event("startup")
+async def startup_event():
+    try:
+        # Test DB connection (do NOT create tables directly in production)
+        async with engine.begin() as conn:
+            await conn.run_sync(lambda conn: logger.info("DB connected successfully"))
+        logger.info("Application startup complete.")
+    except Exception as e:
+        logger.critical(f"Failed to connect to DB on startup: {e}")
+        raise e
+
+
+# Shutdown event
+@app.on_event("shutdown")
+async def shutdown_event():
+    logger.info("Application shutting down.")
+
+
+# CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000", 
-        "https://sql-playground-bay.vercel.app"  # remove trailing slash
-    ],
+    allow_origins=FRONTEND_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Root route
-@app.get("/")
-def read_root():
-    return {"message": "AI SQL Assessment Platform is running "}
+# Include routers
+app.include_router(teacher_routes.router)
+app.include_router(student_routes.router)
+app.include_router(validate_routes.router)
 
-# Register routers
-app.include_router(schema_routes.router, prefix="/schema", tags=["Schema"])
+# Health check endpoint
+@app.get("/")
+async def root():
+    return {"message": "Backend running successfully"}
