@@ -1,6 +1,6 @@
 async_lru==2.0.5
 fastapi==0.118.2
-protobuf==6.32.1
+protobuf==5.29.5
 pydantic==2.12.0
 python-dotenv==1.1.1
 SQLAlchemy==2.0.43
