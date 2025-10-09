@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from routes import teacher_routes, student_routes, validate_routes
 from database import engine, Base
 from dotenv import load_dotenv
+import uvicorn
 
 # Load environment variables
 load_dotenv()
